@@ -1,0 +1,127 @@
+# Coding Standards Configuration
+# 7 rules across 4 categories: Style, Quality, Security, Best Practices
+
+version: "1.0"
+
+settings:
+  # Languages to analyze
+  languages:
+    - python
+    - javascript
+    - typescript
+  
+  # Default severity levels: critical, error, warning, info
+  default_severity: warning
+
+rules:
+  # ============================================
+  # Style & Formatting (2 rules)
+  # ============================================
+  - id: S001
+    name: line_length
+    description: "Lines should not exceed maximum length"
+    category: style
+    severity: warning
+    enabled: true
+    config:
+      max_length: 120
+      ignore_urls: true
+      ignore_imports: true
+
+  - id: S002
+    name: naming_conventions
+    description: "Identifiers should follow naming conventions"
+    category: style
+    severity: warning
+    enabled: true
+    config:
+      patterns:
+        functions: "snake_case"
+        classes: "PascalCase"
+        constants: "UPPER_SNAKE_CASE"
+        variables: "snake_case"
+
+  # ============================================
+  # Code Quality (2 rules)
+  # ============================================
+  - id: Q001
+    name: function_complexity
+    description: "Functions should have low cyclomatic complexity"
+    category: quality
+    severity: error
+    enabled: true
+    config:
+      max_cyclomatic_complexity: 10
+      
+  - id: Q002
+    name: function_length
+    description: "Functions should not be too long"
+    category: quality
+    severity: warning
+    enabled: true
+    config:
+      max_lines: 50
+      exclude_comments: true
+      exclude_blank_lines: true
+
+  # ============================================
+  # Security (2 rules)
+  # ============================================
+  - id: SEC001
+    name: hardcoded_secrets
+    description: "Code should not contain hardcoded secrets or credentials"
+    category: security
+    severity: critical
+    enabled: true
+    config:
+      patterns:
+        - "password\\s*=\\s*['\"][^'\"]+['\"]"
+        - "api_key\\s*=\\s*['\"][^'\"]+['\"]"
+        - "secret\\s*=\\s*['\"][^'\"]+['\"]"
+        - "token\\s*=\\s*['\"][^'\"]+['\"]"
+        - "AWS_SECRET"
+        - "PRIVATE_KEY"
+      exclude_patterns:
+        - "password\\s*=\\s*['\"]['\"]"  # Empty passwords (placeholders)
+        - "os\\.environ"
+        - "getenv"
+
+  - id: SEC002
+    name: sql_injection
+    description: "SQL queries should use parameterized statements"
+    category: security
+    severity: critical
+    enabled: true
+    config:
+      patterns:
+        - "f['\"]SELECT.*\\{.*\\}"
+        - "f['\"]INSERT.*\\{.*\\}"
+        - "f['\"]UPDATE.*\\{.*\\}"
+        - "f['\"]DELETE.*\\{.*\\}"
+        - "\\.format\\(.*\\).*SELECT"
+        - "\\+.*SELECT"
+
+  # ============================================
+  # Best Practices (1 rule)
+  # ============================================
+  - id: BP001
+    name: error_handling
+    description: "Exceptions should be handled properly"
+    category: best_practices
+    severity: warning
+    enabled: true
+    config:
+      checks:
+        - bare_except: true           # Catch bare 'except:' clauses
+        - broad_except: true          # Catch 'except Exception:'
+        - empty_except: true          # Catch empty except blocks
+        - pass_in_except: false       # Allow 'pass' in except (sometimes valid)
+
+# Delegation thresholds (when to invoke refactoring agent)
+delegation:
+  enabled: true
+  criteria:
+    cyclomatic_complexity_threshold: 10
+    violations_per_file_threshold: 3
+    critical_violation_auto_delegate: true
+    function_length_threshold: 50
