@@ -296,3 +296,108 @@ class GitHubClient:
         except GithubException as e:
             logger.error(f"Failed to commit file: {e}")
             return False
+    
+    def get_commit_sha(self, pr_number: int) -> Optional[str]:
+        """
+        Get the latest commit SHA from a PR.
+        
+        Args:
+            pr_number: Pull request number.
+            
+        Returns:
+            Commit SHA or None.
+        """
+        try:
+            gh_pr = self._repo.get_pull(pr_number)
+            commits = list(gh_pr.get_commits())
+            if commits:
+                return commits[-1].sha
+            return None
+        except GithubException as e:
+            logger.error(f"Failed to get commit SHA: {e}")
+            return None
+    
+    def revert_to_commit(
+        self,
+        pr_number: int,
+        commit_sha: str,
+        files: list[str],
+    ) -> bool:
+        """
+        Revert specific files to their state at a given commit.
+        
+        Args:
+            pr_number: Pull request number.
+            commit_sha: Commit SHA to revert to.
+            files: List of file paths to revert.
+            
+        Returns:
+            True if successful, False otherwise.
+        """
+        try:
+            gh_pr = self._repo.get_pull(pr_number)
+            branch = gh_pr.head.ref
+            
+            for file_path in files:
+                try:
+                    # Get file content at the specified commit
+                    old_content = self._repo.get_contents(file_path, ref=commit_sha)
+                    if isinstance(old_content, list):
+                        continue
+                    
+                    content = old_content.decoded_content.decode("utf-8")
+                    
+                    # Get current file SHA
+                    current_file = self._repo.get_contents(file_path, ref=branch)
+                    
+                    # Update to old content
+                    self._repo.update_file(
+                        path=file_path,
+                        message=f"🔄 Rollback: Revert {file_path} to {commit_sha[:7]}",
+                        content=content,
+                        sha=current_file.sha,
+                        branch=branch,
+                    )
+                    
+                    logger.info(f"Reverted {file_path} to {commit_sha[:7]}")
+                    
+                except GithubException as e:
+                    logger.warning(f"Could not revert {file_path}: {e}")
+            
+            return True
+            
+        except GithubException as e:
+            logger.error(f"Failed to revert: {e}")
+            return False
+    
+    def create_rollback_branch(
+        self,
+        pr_number: int,
+        commit_sha: str,
+    ) -> Optional[str]:
+        """
+        Create a rollback branch from a specific commit.
+        
+        Args:
+            pr_number: Pull request number.
+            commit_sha: Commit SHA to branch from.
+            
+        Returns:
+            New branch name or None if failed.
+        """
+        try:
+            gh_pr = self._repo.get_pull(pr_number)
+            rollback_branch = f"rollback/{gh_pr.head.ref}-{commit_sha[:7]}"
+            
+            # Create new branch from the commit
+            ref = self._repo.create_git_ref(
+                ref=f"refs/heads/{rollback_branch}",
+                sha=commit_sha,
+            )
+            
+            logger.info(f"Created rollback branch: {rollback_branch}")
+            return rollback_branch
+            
+        except GithubException as e:
+            logger.error(f"Failed to create rollback branch: {e}")
+            return None
