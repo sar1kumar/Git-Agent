@@ -14,90 +14,52 @@ logger = logging.getLogger(__name__)
 
 class GitHubClient:
     """Client for interacting with GitHub API."""
-    
-    def __init__(
-        self,
-        token: Optional[str] = None,
-        repo_name: Optional[str] = None,
-    ):
-        """
-        Initialize GitHub client.
-        
-        Args:
-            token: GitHub personal access token. Falls back to GITHUB_TOKEN env var.
-            repo_name: Repository in 'owner/repo' format. Falls back to GITHUB_REPOSITORY env var.
-        """
+
+    def __init__(self, token: Optional[str] = None, repo_name: Optional[str] = None):
         self.token = token or os.environ.get("GITHUB_TOKEN")
         if not self.token:
             raise ValueError("GitHub token is required. Set GITHUB_TOKEN environment variable.")
-        
+
         self.repo_name = repo_name or os.environ.get("GITHUB_REPOSITORY")
         if not self.repo_name:
             raise ValueError("Repository name is required. Set GITHUB_REPOSITORY environment variable.")
-        
+
         self._github = Github(self.token)
         self._repo = self._github.get_repo(self.repo_name)
         logger.info(f"Initialized GitHub client for {self.repo_name}")
-    
+
     def get_pull_request(self, pr_number: int) -> PullRequest:
-        """
-        Fetch pull request details including changed files.
-        
-        Args:
-            pr_number: Pull request number.
-            
-        Returns:
-            PullRequest object with file changes.
-        """
+        """Fetch pull request details including changed files."""
         logger.info(f"Fetching PR #{pr_number}")
-        
+
         try:
             gh_pr: GHPullRequest = self._repo.get_pull(pr_number)
         except GithubException as e:
             logger.error(f"Failed to fetch PR #{pr_number}: {e}")
             raise
-        
-        # Get file changes
-        files = []
-        for file in gh_pr.get_files():
-            file_change = FileChange(
-                filename=file.filename,
-                status=file.status,
-                additions=file.additions,
-                deletions=file.deletions,
-                patch=file.patch,
+
+        files = [
+            FileChange(
+                filename=f.filename, status=f.status,
+                additions=f.additions, deletions=f.deletions, patch=f.patch,
             )
-            files.append(file_change)
-        
+            for f in gh_pr.get_files()
+        ]
+
         pr = PullRequest(
-            number=gh_pr.number,
-            title=gh_pr.title,
-            body=gh_pr.body or "",
-            base_branch=gh_pr.base.ref,
-            head_branch=gh_pr.head.ref,
-            author=gh_pr.user.login,
-            files=files,
-            commits_count=gh_pr.commits,
+            number=gh_pr.number, title=gh_pr.title, body=gh_pr.body or "",
+            base_branch=gh_pr.base.ref, head_branch=gh_pr.head.ref,
+            author=gh_pr.user.login, files=files, commits_count=gh_pr.commits,
         )
-        
+
         logger.info(f"Fetched PR #{pr_number}: {len(files)} files changed")
         return pr
-    
+
     def get_file_contents(self, path: str, ref: str) -> Optional[str]:
-        """
-        Get contents of a file at a specific ref.
-        
-        Args:
-            path: File path in the repository.
-            ref: Git ref (branch, tag, or commit SHA).
-            
-        Returns:
-            File contents as string, or None if not found.
-        """
+        """Get contents of a file at a specific git ref."""
         try:
             content = self._repo.get_contents(path, ref=ref)
             if isinstance(content, list):
-                # Directory, not a file
                 return None
             return content.decoded_content.decode("utf-8")
         except GithubException as e:
@@ -105,136 +67,65 @@ class GitHubClient:
                 logger.debug(f"File not found: {path} at {ref}")
                 return None
             raise
-    
-    def post_review_comment(
-        self,
-        pr_number: int,
-        comment: ReviewComment,
-        commit_sha: str,
-    ) -> bool:
-        """
-        Post a review comment on a specific line.
-        
-        Args:
-            pr_number: Pull request number.
-            comment: ReviewComment to post.
-            commit_sha: Commit SHA to comment on.
-            
-        Returns:
-            True if successful, False otherwise.
-        """
-        try:
-            gh_pr = self._repo.get_pull(pr_number)
-            gh_pr.create_review_comment(
-                body=comment.format_body(),
-                commit_id=self._repo.get_commit(commit_sha),
-                path=comment.file,
-                line=comment.line,
-            )
-            logger.info(f"Posted comment on {comment.file}:{comment.line}")
-            return True
-        except GithubException as e:
-            logger.error(f"Failed to post comment: {e}")
-            return False
-    
+
     def post_review(
-        self,
-        pr_number: int,
-        comments: list[ReviewComment],
-        summary: str,
+        self, pr_number: int, comments: list[ReviewComment], summary: str,
     ) -> bool:
-        """
-        Post a complete review with multiple comments.
-        
-        Args:
-            pr_number: Pull request number.
-            comments: List of ReviewComment objects.
-            summary: Overall review summary.
-            
-        Returns:
-            True if successful, False otherwise.
-        """
+        """Post a complete review with inline comments and a summary."""
         try:
             gh_pr = self._repo.get_pull(pr_number)
             commit = gh_pr.get_commits().reversed[0]
-            
-            # Build review comments
-            review_comments = []
-            for comment in comments:
-                review_comments.append({
-                    "path": comment.file,
-                    "line": comment.line,
-                    "body": comment.format_body(),
-                })
-            
-            # Determine review event based on severity
+
+            review_comments = [
+                {"path": c.file, "line": c.line, "body": c.format_body()}
+                for c in comments
+            ]
+
             has_critical = any(c.severity == Severity.CRITICAL for c in comments)
             has_errors = any(c.severity == Severity.ERROR for c in comments)
-            
+
             if has_critical or has_errors:
                 event = "REQUEST_CHANGES"
             elif comments:
                 event = "COMMENT"
             else:
                 event = "APPROVE"
-            
+
             gh_pr.create_review(
-                commit=commit,
-                body=summary,
-                event=event,
+                commit=commit, body=summary, event=event,
                 comments=review_comments if review_comments else None,
             )
-            
             logger.info(f"Posted review with {len(comments)} comments, event={event}")
             return True
-            
+
         except GithubException as e:
             logger.error(f"Failed to post review: {e}")
-            # Fall back to posting individual comments
-            return self._post_comments_individually(pr_number, comments, summary)
-    
-    def _post_comments_individually(
-        self,
-        pr_number: int,
-        comments: list[ReviewComment],
-        summary: str,
+            return self._post_fallback(pr_number, comments, summary)
+
+    def _post_fallback(
+        self, pr_number: int, comments: list[ReviewComment], summary: str,
     ) -> bool:
-        """Fallback method to post comments individually."""
+        """Fallback: post summary as issue comment + individual line comments."""
         try:
             gh_pr = self._repo.get_pull(pr_number)
-            
-            # Post summary as issue comment
             gh_pr.create_issue_comment(summary)
-            
-            # Post individual line comments
+
             commit = gh_pr.get_commits().reversed[0]
             for comment in comments:
                 try:
                     gh_pr.create_review_comment(
-                        body=comment.format_body(),
-                        commit=commit,
-                        path=comment.file,
-                        line=comment.line,
+                        body=comment.format_body(), commit=commit,
+                        path=comment.file, line=comment.line,
                     )
                 except GithubException as e:
                     logger.warning(f"Could not post line comment: {e}")
-            
             return True
         except GithubException as e:
-            logger.error(f"Failed to post individual comments: {e}")
+            logger.error(f"Failed to post fallback comments: {e}")
             return False
-    
+
     def post_summary_comment(self, pr_number: int, summary: str) -> bool:
-        """
-        Post a summary comment on the PR.
-        
-        Args:
-            pr_number: Pull request number.
-            summary: Summary markdown content.
-            
-        Returns:
-            True if successful, False otherwise.
-        """
+        """Post a summary comment on the PR."""
         try:
             gh_pr = self._repo.get_pull(pr_number)
             gh_pr.create_issue_comment(summary)
@@ -243,161 +134,73 @@ class GitHubClient:
         except GithubException as e:
             logger.error(f"Failed to post summary: {e}")
             return False
-    
+
     def commit_file(
-        self,
-        pr_number: int,
-        file_path: str,
-        content: str,
-        message: str,
+        self, pr_number: int, file_path: str, content: str, message: str,
     ) -> bool:
-        """
-        Commit a file change to the PR branch.
-        
-        Args:
-            pr_number: Pull request number.
-            file_path: Path to the file.
-            content: New file content.
-            message: Commit message.
-            
-        Returns:
-            True if successful, False otherwise.
-        """
+        """Commit a file change to the PR branch."""
         try:
             gh_pr = self._repo.get_pull(pr_number)
             branch = gh_pr.head.ref
-            
-            # Get current file to get its SHA
+
             try:
                 current_file = self._repo.get_contents(file_path, ref=branch)
                 sha = current_file.sha
             except GithubException:
                 sha = None
-            
+
             if sha:
                 self._repo.update_file(
-                    path=file_path,
-                    message=message,
-                    content=content,
-                    sha=sha,
-                    branch=branch,
+                    path=file_path, message=message,
+                    content=content, sha=sha, branch=branch,
                 )
             else:
                 self._repo.create_file(
-                    path=file_path,
-                    message=message,
-                    content=content,
-                    branch=branch,
+                    path=file_path, message=message, content=content, branch=branch,
                 )
-            
+
             logger.info(f"Committed changes to {file_path}")
             return True
-            
         except GithubException as e:
             logger.error(f"Failed to commit file: {e}")
             return False
-    
+
     def get_commit_sha(self, pr_number: int) -> Optional[str]:
-        """
-        Get the latest commit SHA from a PR.
-        
-        Args:
-            pr_number: Pull request number.
-            
-        Returns:
-            Commit SHA or None.
-        """
+        """Get the latest commit SHA from a PR."""
         try:
             gh_pr = self._repo.get_pull(pr_number)
             commits = list(gh_pr.get_commits())
-            if commits:
-                return commits[-1].sha
-            return None
+            return commits[-1].sha if commits else None
         except GithubException as e:
             logger.error(f"Failed to get commit SHA: {e}")
             return None
-    
+
     def revert_to_commit(
-        self,
-        pr_number: int,
-        commit_sha: str,
-        files: list[str],
+        self, pr_number: int, commit_sha: str, files: list[str],
     ) -> bool:
-        """
-        Revert specific files to their state at a given commit.
-        
-        Args:
-            pr_number: Pull request number.
-            commit_sha: Commit SHA to revert to.
-            files: List of file paths to revert.
-            
-        Returns:
-            True if successful, False otherwise.
-        """
+        """Revert specific files to their state at a given commit."""
         try:
             gh_pr = self._repo.get_pull(pr_number)
             branch = gh_pr.head.ref
-            
+
             for file_path in files:
                 try:
-                    # Get file content at the specified commit
                     old_content = self._repo.get_contents(file_path, ref=commit_sha)
                     if isinstance(old_content, list):
                         continue
-                    
                     content = old_content.decoded_content.decode("utf-8")
-                    
-                    # Get current file SHA
                     current_file = self._repo.get_contents(file_path, ref=branch)
-                    
-                    # Update to old content
+
                     self._repo.update_file(
                         path=file_path,
-                        message=f"🔄 Rollback: Revert {file_path} to {commit_sha[:7]}",
-                        content=content,
-                        sha=current_file.sha,
-                        branch=branch,
+                        message=f"Rollback: Revert {file_path} to {commit_sha[:7]}",
+                        content=content, sha=current_file.sha, branch=branch,
                     )
-                    
                     logger.info(f"Reverted {file_path} to {commit_sha[:7]}")
-                    
                 except GithubException as e:
                     logger.warning(f"Could not revert {file_path}: {e}")
-            
+
             return True
-            
         except GithubException as e:
             logger.error(f"Failed to revert: {e}")
             return False
-    
-    def create_rollback_branch(
-        self,
-        pr_number: int,
-        commit_sha: str,
-    ) -> Optional[str]:
-        """
-        Create a rollback branch from a specific commit.
-        
-        Args:
-            pr_number: Pull request number.
-            commit_sha: Commit SHA to branch from.
-            
-        Returns:
-            New branch name or None if failed.
-        """
-        try:
-            gh_pr = self._repo.get_pull(pr_number)
-            rollback_branch = f"rollback/{gh_pr.head.ref}-{commit_sha[:7]}"
-            
-            # Create new branch from the commit
-            ref = self._repo.create_git_ref(
-                ref=f"refs/heads/{rollback_branch}",
-                sha=commit_sha,
-            )
-            
-            logger.info(f"Created rollback branch: {rollback_branch}")
-            return rollback_branch
-            
-        except GithubException as e:
-            logger.error(f"Failed to create rollback branch: {e}")
-            return None
