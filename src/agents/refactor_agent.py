@@ -8,10 +8,6 @@ from src.github.models import Violation, RefactorResult, Severity
 from src.github.client import GitHubClient
 from src.llm.ollama_client import OllamaClient
 from src.analysis.ast_analyzer import ASTAnalyzer
-<<<<<<< Updated upstream
-=======
-
->>>>>>> Stashed changes
 logger = logging.getLogger(__name__)
 
 
