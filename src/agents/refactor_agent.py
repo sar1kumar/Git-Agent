@@ -7,7 +7,7 @@ from typing import Optional
 from src.github.models import Violation, RefactorResult, Severity
 from src.github.client import GitHubClient
 from src.llm.ollama_client import OllamaClient
-
+from src.analysis.ast_analyzer import ASTAnalyzer
 logger = logging.getLogger(__name__)
 
 
@@ -18,6 +18,7 @@ class RefactorAgent:
         self,
         github_client: GitHubClient,
         ollama_client: Optional[OllamaClient] = None,
+        ast_analyzer: Optional[ASTAnalyzer] = None,
         auto_commit: bool = False,
     ):
         """
@@ -30,6 +31,7 @@ class RefactorAgent:
         """
         self.github = github_client
         self.llm = ollama_client
+        self.ast = ast_analyzer or ASTAnalyzer()
         self.auto_commit = auto_commit
         
         logger.info(f"Initialized RefactorAgent (auto_commit={auto_commit})")
