@@ -16,7 +16,7 @@ from src.analysis.rules_engine import RulesEngine
 from src.analysis.ast_analyzer import ASTAnalyzer
 from src.llm.ollama_client import OllamaClient
 from src.agents.review_agent import ReviewAgent
-from src.agents.protocol import AgentRole, HandoffContext, MessageBus
+from src.agents.protocol import AgentRole, HandoffContext
 
 logger = logging.getLogger(__name__)
 
@@ -62,8 +62,6 @@ class ReviewOrchestrator:
         self.enable_verification = enable_verification
         self.enable_tests = enable_tests
         self.enable_rollback = enable_rollback
-        self.message_bus = MessageBus()
-        
         self.review_agent = ReviewAgent(
             github_client=self.github, rules_engine=self.rules,
             ollama_client=self.ollama, use_llm=self.use_llm,

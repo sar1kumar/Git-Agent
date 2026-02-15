@@ -112,10 +112,10 @@ rules:
     enabled: true
     config:
       checks:
-        - bare_except: true           # Catch bare 'except:' clauses
-        - broad_except: true          # Catch 'except Exception:'
-        - empty_except: true          # Catch empty except blocks
-        - pass_in_except: false       # Allow 'pass' in except (sometimes valid)
+        bare_except: true           # Catch bare 'except:' clauses
+        broad_except: true          # Catch 'except Exception:'
+        empty_except: true          # Catch empty except blocks
+        pass_in_except: false       # Allow 'pass' in except (sometimes valid)
 
 # Delegation thresholds (when to invoke refactoring agent)
 delegation:

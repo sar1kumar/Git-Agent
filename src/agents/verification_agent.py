@@ -8,13 +8,6 @@ from enum import Enum
 
 from src.analysis.ast_analyzer import ASTAnalyzer
 from src.llm.ollama_client import OllamaClient
-from src.agents.protocol import (
-    AgentMessage,
-    AgentRole,
-    MessageType,
-    HandoffContext,
-)
-
 logger = logging.getLogger(__name__)
 
 
@@ -404,49 +397,3 @@ Respond with JSON:
                 message=f"Could not verify semantic equivalence: {e}",
             )
     
-    def handle_message(self, message: AgentMessage) -> AgentMessage:
-        """Handle a verification request message."""
-        if message.message_type != MessageType.VERIFY_REQUEST:
-            return message.create_error_response(
-                AgentRole.VERIFIER,
-                f"Unexpected message type: {message.message_type}",
-            )
-        
-        payload = message.payload
-        context = HandoffContext.from_dict(payload.get("context", {}))
-        refactored_files = payload.get("refactored_files", {})
-        
-        context.add_to_chain(AgentRole.VERIFIER)
-        
-        all_results = {}
-        all_passed = True
-        requires_review = False
-        
-        for filename, refactored_code in refactored_files.items():
-            original_code = context.original_code.get(filename, "")
-            violations = [v for v in context.violations if v.get("file") == filename]
-            
-            result = self.verify(
-                original_code=original_code,
-                refactored_code=refactored_code,
-                filename=filename,
-                violations_to_fix=violations,
-            )
-            
-            all_results[filename] = result.to_dict()
-            
-            if not result.passed:
-                all_passed = False
-            if result.requires_human_review:
-                requires_review = True
-        
-        return message.create_response(
-            message_type=MessageType.VERIFY_RESULT,
-            sender=AgentRole.VERIFIER,
-            payload={
-                "context": context.to_dict(),
-                "passed": all_passed,
-                "requires_human_review": requires_review,
-                "results": all_results,
-            },
-        )

@@ -5,16 +5,14 @@ from .refactor_agent import RefactorAgent
 from .orchestrator import ReviewOrchestrator
 from .verification_agent import VerificationAgent
 from .test_runner import TestRunner
+from .protocol import AgentRole, HandoffContext
 
 __all__ = [
     "ReviewAgent",
-    "RefactorAgent", 
+    "RefactorAgent",
     "ReviewOrchestrator",
     "VerificationAgent",
     "TestRunner",
-    "AgentMessage",
     "AgentRole",
-    "MessageType",
     "HandoffContext",
-    "MessageBus",
 ]

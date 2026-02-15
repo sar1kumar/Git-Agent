@@ -10,13 +10,6 @@ from typing import Optional
 from pathlib import Path
 from enum import Enum
 
-from src.agents.protocol import (
-    AgentMessage,
-    AgentRole,
-    MessageType,
-    HandoffContext,
-)
-
 logger = logging.getLogger(__name__)
 
 
@@ -408,38 +401,3 @@ class TestRunner:
                 stderr=str(e),
             )
     
-    def handle_message(self, message: AgentMessage) -> AgentMessage:
-        """Handle a test request message."""
-        if message.message_type != MessageType.TEST_REQUEST:
-            return message.create_error_response(
-                AgentRole.TEST_RUNNER,
-                f"Unexpected message type: {message.message_type}",
-            )
-        
-        payload = message.payload
-        context = HandoffContext.from_dict(payload.get("context", {}))
-        test_files = payload.get("test_files")
-        
-        context.add_to_chain(AgentRole.TEST_RUNNER)
-        
-        # Run tests with refactored code in sandbox
-        if context.refactored_code:
-            result = self.run_tests_in_sandbox(
-                context.refactored_code,
-                test_files,
-            )
-        else:
-            result = self.run_tests(
-                test_files,
-                context.files,
-            )
-        
-        return message.create_response(
-            message_type=MessageType.TEST_RESULT,
-            sender=AgentRole.TEST_RUNNER,
-            payload={
-                "context": context.to_dict(),
-                "result": result.to_dict(),
-                "passed": result.status == TestStatus.PASSED,
-            },
-        )
