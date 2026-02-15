@@ -162,6 +162,17 @@ class ReviewOrchestrator:
             for v in violations:
                 logs.append(add_log(state, "rule_triggered", rule_id=v.rule_id, file=v.file,
                                    line=v.line, severity=v.severity.value))
+            for comment in comments:
+                logs.append(add_log(
+                    state,
+                    "comment_generated",
+                    file=comment.file,
+                    line=comment.line,
+                    severity=comment.severity.value,
+                    rule_id=comment.rule_id,
+                    body=comment.body,
+                    suggestion_code=comment.suggestion_code,
+                ))
             return {"violations": violations, "comments": comments, "summary": summary,
                     "context": context, "logs": logs}
         except Exception as e:
@@ -279,6 +290,7 @@ class ReviewOrchestrator:
         summary = state.get("summary")
         if not summary:
             return {"logs": logs}
+        comments = state.get("comments", [])
         
         results = state.get("refactor_results", [])
         if results and not state.get("rollback_performed", False):
@@ -286,8 +298,19 @@ class ReviewOrchestrator:
             summary.refactoring_files = [r.file for r in results]
         
         try:
-            self.review_agent.post_review(state["pr_number"], state.get("comments", []), summary)
-            logs.append(add_log(state, "comments_posted", count=len(state.get("comments", []))))
+            for comment in comments:
+                logs.append(add_log(
+                    state,
+                    "comment_post_attempt",
+                    file=comment.file,
+                    line=comment.line,
+                    severity=comment.severity.value,
+                    rule_id=comment.rule_id,
+                    body=comment.body,
+                    suggestion_code=comment.suggestion_code,
+                ))
+            success = self.review_agent.post_review(state["pr_number"], comments, summary)
+            logs.append(add_log(state, "comments_posted", count=len(comments), success=success))
         except Exception as e:
             logs.append(add_log(state, "error", message=str(e)))
         return {"logs": logs}
