@@ -12,34 +12,9 @@ An intelligent, automated code review system that integrates with GitHub's pull 
 - **Reproducible Results**: JSONL logging for auditability
 
 ## Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        GitHub Actions                           │
-│  ┌─────────────┐    ┌─────────────┐    ┌─────────────────────┐  │
-│  │ PR Trigger  │───▶│   Ollama   │───▶│   Review Agent      │  │
-│  └─────────────┘    │  (CodeLlama)│    │   - Diff Parser     │  │
-│                     └─────────────┘    │   - Rules Engine    │  │
-│                                        │   - LLM Analysis    │  │
-│                                        └──────────┬──────────┘  │
-│                                                   │             │
-│                     ┌─────────────────────────────▼───────────┐ │
-│                     │        LangGraph Orchestrator           │ │
-│                     │  ┌─────────┐  ┌─────────┐  ┌─────────┐  │ │
-│                     │  │ Fetch   │─▶│ Analyze │─▶│ Decide │  │ │
-│                     │  │ PR      │  │ Code    │  │ Delegate│  │ │
-│                     │  └─────────┘  └─────────┘  └────┬────┘  │ │
-│                     │                                  │      │ │
-│                     │         ┌────────────────────────┘      │ │
-│                     │         ▼                               │ │
-│                     │  ┌─────────────┐    ┌─────────────────┐ │ │
-│                     │  │ Refactor   │───▶│ Post Comments   │    │
-│                     │  │ Agent       │    │ & Summary       │ │ │
-│                     │  └─────────────┘    └─────────────────┘ │ │
-│                     └─────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────────┘
-```
-
+![core](images/core.png)
+### Sequence Diagram
+![seq_diagram](images/seq_diagram.png)
 ## Quick Start
 
 ### Prerequisites
