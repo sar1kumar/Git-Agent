@@ -245,20 +245,3 @@ RULE_CLASSES = {
 
 3. Add configuration in `config/coding_standards.yaml`
 
-## Known Limitations
-
-- Tree-sitter AST analysis not yet implemented (on roadmap)
-- Refactoring agent has limited automatic fix capabilities
-- LLM analysis requires local Ollama server
-
-## Future Improvements
-
-- [ ] Tree-sitter integration for proper AST parsing
-- [ ] More sophisticated refactoring (extract method, simplify conditionals)
-- [ ] Test coverage analysis integration
-- [ ] Custom rule plugins
-- [ ] Web dashboard for review history
-
-## License
-
-MIT License - See [LICENSE](LICENSE) for details.
